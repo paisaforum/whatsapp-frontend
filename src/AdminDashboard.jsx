@@ -17,6 +17,52 @@ import {
     Legend
 } from 'chart.js';
 
+// ADD these state variables (around line 20-30)
+
+// Admin Management (Super Admin Only)
+const [admins, setAdmins] = useState([]);
+const [showCreateAdminModal, setShowCreateAdminModal] = useState(false);
+const [showEditAdminModal, setShowEditAdminModal] = useState(false);
+const [selectedAdmin, setSelectedAdmin] = useState(null);
+const [adminForm, setAdminForm] = useState({
+    username: '',
+    password: '',
+    confirmPassword: '',
+    permissions: []
+});
+
+// Activity Logs
+const [activityLogs, setActivityLogs] = useState([]);
+const [showActivityLogs, setShowActivityLogs] = useState(false);
+
+// Password Change
+const [showPasswordModal, setShowPasswordModal] = useState(false);
+const [passwordForm, setPasswordForm] = useState({
+    oldPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+});
+const [passwordLoading, setPasswordLoading] = useState(false);
+
+
+// ADD this after imports, before function AdminDashboard()
+
+const AVAILABLE_PERMISSIONS = [
+    { id: 'view_users', label: 'View Users', description: 'Can view user list and profiles' },
+    { id: 'manage_users', label: 'Manage Users', description: 'Can ban/unban users' },
+    { id: 'view_submissions', label: 'View Submissions', description: 'Can view proof submissions' },
+    { id: 'approve_submissions', label: 'Approve Submissions', description: 'Can approve/reject submissions' },
+    { id: 'view_redemptions', label: 'View Redemptions', description: 'Can view redemption requests' },
+    { id: 'manage_redemptions', label: 'Manage Redemptions', description: 'Can approve/reject redemptions' },
+    { id: 'manage_banners', label: 'Manage Banners', description: 'Can create/edit/delete banners' },
+    { id: 'manage_offers', label: 'Manage Offers', description: 'Can create/edit/delete offers' },
+    { id: 'manage_social_links', label: 'Manage Social Links', description: 'Can manage social media links' },
+    { id: 'view_messages', label: 'View Messages', description: 'Can view user messages' },
+    { id: 'send_messages', label: 'Send Messages', description: 'Can send messages to users' },
+    { id: 'view_analytics', label: 'View Analytics', description: 'Can view statistics and reports' }
+];
+
+
 // ⬇️ ADD THIS LINE ⬇️
 const API_BASE = 'https://vggamee.com/api';
 
@@ -163,6 +209,15 @@ function AdminDashboard() {
         fetchSettings();
         fetchBanners();
         fetchSocialLinks();
+
+
+        // Inside your fetchDashboardData function, ADD:
+
+        // If super admin, fetch admins list
+        const adminRole = localStorage.getItem('adminRole') || 'admin';
+        if (adminRole === 'super_admin') {
+            fetchAdmins();
+        }
 
         // Silent auto-refresh intervals (no visual indicators)
         const redemptionsInterval = setInterval(() => {
@@ -952,6 +1007,176 @@ function AdminDashboard() {
         }
     };
 
+
+
+
+    // ========== ADD THESE FUNCTIONS ==========
+
+    const fetchAdmins = async () => {
+        try {
+            const res = await axios.get(`${API_BASE}/admin/admins`, {
+                headers: getAuthHeaders()
+            });
+            setAdmins(res.data.admins || []);
+        } catch (error) {
+            console.error('Error fetching admins:', error);
+        }
+    };
+
+    const fetchActivityLogs = async (adminId = null) => {
+        try {
+            const url = adminId
+                ? `${API_BASE}/admin/activity-logs?adminId=${adminId}&limit=50`
+                : `${API_BASE}/admin/activity-logs?limit=50`;
+
+            const res = await axios.get(url, {
+                headers: getAuthHeaders()
+            });
+            setActivityLogs(res.data.logs || []);
+        } catch (error) {
+            console.error('Error fetching activity logs:', error);
+        }
+    };
+
+    const handlePasswordChange = async (e) => {
+        e.preventDefault();
+
+        if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+            showToast('Passwords do not match', 'error');
+            return;
+        }
+
+        if (passwordForm.newPassword.length < 8) {
+            showToast('Password must be at least 8 characters', 'error');
+            return;
+        }
+
+        setPasswordLoading(true);
+
+        try {
+            await axios.post(`${API_BASE}/admin/change-password`, {
+                oldPassword: passwordForm.oldPassword,
+                newPassword: passwordForm.newPassword
+            }, {
+                headers: getAuthHeaders()
+            });
+
+            showToast('Password changed successfully!', 'success');
+            setShowPasswordModal(false);
+            setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+        } catch (error) {
+            showToast(error.response?.data?.error || 'Failed to change password', 'error');
+        } finally {
+            setPasswordLoading(false);
+        }
+    };
+
+    const handleCreateAdmin = async (e) => {
+        e.preventDefault();
+
+        if (adminForm.password !== adminForm.confirmPassword) {
+            showToast('Passwords do not match', 'error');
+            return;
+        }
+
+        if (adminForm.password.length < 8) {
+            showToast('Password must be at least 8 characters', 'error');
+            return;
+        }
+
+        try {
+            await axios.post(`${API_BASE}/admin/create-admin`, {
+                username: adminForm.username,
+                password: adminForm.password,
+                permissions: adminForm.permissions
+            }, {
+                headers: getAuthHeaders()
+            });
+
+            showToast('Admin created successfully!', 'success');
+            setShowCreateAdminModal(false);
+            setAdminForm({ username: '', password: '', confirmPassword: '', permissions: [] });
+            fetchAdmins();
+        } catch (error) {
+            showToast(error.response?.data?.error || 'Failed to create admin', 'error');
+        }
+    };
+
+    const handleUpdatePermissions = async (adminId, permissions) => {
+        try {
+            await axios.put(`${API_BASE}/admin/admins/${adminId}/permissions`, {
+                permissions
+            }, {
+                headers: getAuthHeaders()
+            });
+
+            showToast('Permissions updated successfully!', 'success');
+            setShowEditAdminModal(false);
+            fetchAdmins();
+        } catch (error) {
+            showToast(error.response?.data?.error || 'Failed to update permissions', 'error');
+        }
+    };
+
+    const handleToggleAdminStatus = async (adminId) => {
+        try {
+            await axios.post(`${API_BASE}/admin/admins/${adminId}/toggle-status`, {}, {
+                headers: getAuthHeaders()
+            });
+
+            showToast('Admin status updated!', 'success');
+            fetchAdmins();
+        } catch (error) {
+            showToast(error.response?.data?.error || 'Failed to update status', 'error');
+        }
+    };
+
+    const handleDeleteAdmin = async (adminId, username) => {
+        if (!confirm(`Are you sure you want to delete admin "${username}"?`)) {
+            return;
+        }
+
+        try {
+            await axios.delete(`${API_BASE}/admin/admins/${adminId}`, {
+                headers: getAuthHeaders()
+            });
+
+            showToast('Admin deleted successfully!', 'success');
+            fetchAdmins();
+        } catch (error) {
+            showToast(error.response?.data?.error || 'Failed to delete admin', 'error');
+        }
+    };
+
+    const openEditPermissionsModal = async (admin) => {
+        setSelectedAdmin(admin);
+
+        try {
+            const res = await axios.get(`${API_BASE}/admin/admins/${admin.id}/permissions`, {
+                headers: getAuthHeaders()
+            });
+
+            setAdminForm({
+                ...adminForm,
+                permissions: res.data.permissions || []
+            });
+            setShowEditAdminModal(true);
+        } catch (error) {
+            showToast('Failed to fetch permissions', 'error');
+        }
+    };
+
+    const togglePermission = (permissionId) => {
+        setAdminForm(prev => ({
+            ...prev,
+            permissions: prev.permissions.includes(permissionId)
+                ? prev.permissions.filter(p => p !== permissionId)
+                : [...prev.permissions, permissionId]
+        }));
+    };
+
+
+
     const handleLogout = () => {
         localStorage.removeItem('adminId');
         localStorage.removeItem('adminToken');
@@ -969,19 +1194,39 @@ function AdminDashboard() {
     return (
         <div className="min-h-screen bg-gray-50">
             {/* Header */}
-            <div className="bg-gray-800 text-white shadow-lg">
-                <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="bg-white shadow">
+                <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center">
-                        <h1 className="text-2xl font-bold">WhatsApp Task Admin Dashboard</h1>
-                        <button
-                            onClick={handleLogout}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition"
-                        >
-                            Logout
-                        </button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+                            <p className="text-sm text-gray-600 mt-1">
+                                Welcome, <span className="font-semibold">{adminInfo.username}</span>
+                                {adminInfo.role === 'super_admin' && (
+                                    <span className="ml-2 px-2 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded">
+                                        SUPER ADMIN
+                                    </span>
+                                )}
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            {/* ADD THIS BUTTON */}
+                            <button
+                                onClick={() => setShowPasswordModal(true)}
+                                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition"
+                            >
+                                Change Password
+                            </button>
+                            <button
+                                onClick={handleLogout}
+                                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition"
+                            >
+                                Logout
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
+
 
             <div className="max-w-7xl mx-auto px-4 py-6">
                 {/* Stats */}
@@ -1060,6 +1305,108 @@ function AdminDashboard() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Admin Management Section (Super Admin Only) */}
+                            {adminInfo.role === 'super_admin' && (
+                                <div className="bg-white rounded-lg shadow p-6 mb-6">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h2 className="text-2xl font-bold text-gray-800">Admin Management</h2>
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    setShowActivityLogs(true);
+                                                    fetchActivityLogs();
+                                                }}
+                                                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition"
+                                            >
+                                                View Activity Logs
+                                            </button>
+                                            <button
+                                                onClick={() => setShowCreateAdminModal(true)}
+                                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                                            >
+                                                + Create Admin
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead className="bg-gray-50">
+                                                <tr>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Username</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Last Login</th>
+                                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {admins.map(admin => (
+                                                    <tr key={admin.id}>
+                                                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{admin.username}</td>
+                                                        <td className="px-4 py-3 text-sm">
+                                                            <span className={`px-2 py-1 rounded text-xs font-bold ${admin.role === 'super_admin'
+                                                                ? 'bg-purple-100 text-purple-800'
+                                                                : 'bg-blue-100 text-blue-800'
+                                                                }`}>
+                                                                {admin.role.toUpperCase()}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm">
+                                                            <span className={`px-2 py-1 rounded text-xs font-bold ${admin.is_active
+                                                                ? 'bg-green-100 text-green-800'
+                                                                : 'bg-red-100 text-red-800'
+                                                                }`}>
+                                                                {admin.is_active ? 'Active' : 'Inactive'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">
+                                                            {admin.last_login ? new Date(admin.last_login).toLocaleString() : 'Never'}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-sm">
+                                                            {admin.role !== 'super_admin' && (
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() => openEditPermissionsModal(admin)}
+                                                                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded transition"
+                                                                    >
+                                                                        Permissions
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleToggleAdminStatus(admin.id)}
+                                                                        className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white text-xs rounded transition"
+                                                                    >
+                                                                        {admin.is_active ? 'Disable' : 'Enable'}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setSelectedAdmin(admin);
+                                                                            fetchActivityLogs(admin.id);
+                                                                            setShowActivityLogs(true);
+                                                                        }}
+                                                                        className="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white text-xs rounded transition"
+                                                                    >
+                                                                        Activity
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => handleDeleteAdmin(admin.id, admin.username)}
+                                                                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition"
+                                                                    >
+                                                                        Delete
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
+
+
 
                             {/* Date Range Filter */}
                             <div className="flex gap-2 mb-6 justify-end">
@@ -1913,8 +2260,8 @@ function AdminDashboard() {
                                     <button
                                         onClick={() => handleToggleSocialLink(link.id)}
                                         className={`px-3 py-1 rounded text-xs font-bold ${link.is_active
-                                                ? 'bg-green-100 text-green-700'
-                                                : 'bg-gray-200 text-gray-600'
+                                            ? 'bg-green-100 text-green-700'
+                                            : 'bg-gray-200 text-gray-600'
                                             }`}
                                     >
                                         {link.is_active ? 'Active' : 'Inactive'}
@@ -3048,6 +3395,250 @@ function AdminDashboard() {
                     </div>
                 </div>
             )}
+
+
+            {/* Password Change Modal */}
+            {showPasswordModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">Change Password</h2>
+                        <form onSubmit={handlePasswordChange}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 font-semibold mb-2">Current Password</label>
+                                <input
+                                    type="password"
+                                    value={passwordForm.oldPassword}
+                                    onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 font-semibold mb-2">New Password</label>
+                                <input
+                                    type="password"
+                                    value={passwordForm.newPassword}
+                                    onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                    minLength={8}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Minimum 8 characters</p>
+                            </div>
+                            <div className="mb-6">
+                                <label className="block text-gray-700 font-semibold mb-2">Confirm New Password</label>
+                                <input
+                                    type="password"
+                                    value={passwordForm.confirmPassword}
+                                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowPasswordModal(false);
+                                        setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={passwordLoading}
+                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition disabled:opacity-50"
+                                >
+                                    {passwordLoading ? 'Changing...' : 'Change Password'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Create Admin Modal */}
+            {showCreateAdminModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 my-8">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">Create New Admin</h2>
+                        <form onSubmit={handleCreateAdmin}>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 font-semibold mb-2">Username</label>
+                                <input
+                                    type="text"
+                                    value={adminForm.username}
+                                    onChange={(e) => setAdminForm({ ...adminForm, username: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+                            <div className="mb-4">
+                                <label className="block text-gray-700 font-semibold mb-2">Password</label>
+                                <input
+                                    type="password"
+                                    value={adminForm.password}
+                                    onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                    minLength={8}
+                                />
+                            </div>
+                            <div className="mb-6">
+                                <label className="block text-gray-700 font-semibold mb-2">Confirm Password</label>
+                                <input
+                                    type="password"
+                                    value={adminForm.confirmPassword}
+                                    onChange={(e) => setAdminForm({ ...adminForm, confirmPassword: e.target.value })}
+                                    className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    required
+                                />
+                            </div>
+
+                            <div className="mb-6">
+                                <label className="block text-gray-700 font-semibold mb-3">Permissions</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-64 overflow-y-auto border rounded-lg p-4">
+                                    {AVAILABLE_PERMISSIONS.map(perm => (
+                                        <label key={perm.id} className="flex items-start gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                                            <input
+                                                type="checkbox"
+                                                checked={adminForm.permissions.includes(perm.id)}
+                                                onChange={() => togglePermission(perm.id)}
+                                                className="mt-1"
+                                            />
+                                            <div>
+                                                <div className="font-semibold text-sm">{perm.label}</div>
+                                                <div className="text-xs text-gray-500">{perm.description}</div>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowCreateAdminModal(false);
+                                        setAdminForm({ username: '', password: '', confirmPassword: '', permissions: [] });
+                                    }}
+                                    className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg transition"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                                >
+                                    Create Admin
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit Permissions Modal */}
+            {showEditAdminModal && selectedAdmin && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 my-8">
+                        <h2 className="text-2xl font-bold text-gray-800 mb-4">
+                            Edit Permissions: {selectedAdmin.username}
+                        </h2>
+
+                        <div className="mb-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-96 overflow-y-auto border rounded-lg p-4">
+                                {AVAILABLE_PERMISSIONS.map(perm => (
+                                    <label key={perm.id} className="flex items-start gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                                        <input
+                                            type="checkbox"
+                                            checked={adminForm.permissions.includes(perm.id)}
+                                            onChange={() => togglePermission(perm.id)}
+                                            className="mt-1"
+                                        />
+                                        <div>
+                                            <div className="font-semibold text-sm">{perm.label}</div>
+                                            <div className="text-xs text-gray-500">{perm.description}</div>
+                                        </div>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => {
+                                    setShowEditAdminModal(false);
+                                    setSelectedAdmin(null);
+                                }}
+                                className="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 rounded-lg transition"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => handleUpdatePermissions(selectedAdmin.id, adminForm.permissions)}
+                                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                            >
+                                Update Permissions
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Activity Logs Modal */}
+            {showActivityLogs && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full p-6 max-h-[80vh] overflow-y-auto">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold text-gray-800">
+                                Activity Logs {selectedAdmin && `- ${selectedAdmin.username}`}
+                            </h2>
+                            <button
+                                onClick={() => {
+                                    setShowActivityLogs(false);
+                                    setSelectedAdmin(null);
+                                }}
+                                className="text-gray-600 hover:text-gray-800 text-2xl"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-4 py-2 text-left">Time</th>
+                                        <th className="px-4 py-2 text-left">Admin</th>
+                                        <th className="px-4 py-2 text-left">Action</th>
+                                        <th className="px-4 py-2 text-left">Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {activityLogs.map(log => (
+                                        <tr key={log.id}>
+                                            <td className="px-4 py-2 text-xs text-gray-600">
+                                                {new Date(log.created_at).toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-2 font-semibold">{log.admin_username}</td>
+                                            <td className="px-4 py-2">
+                                                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-bold">
+                                                    {log.action}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-2 text-gray-600">{log.details}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
 
 
             <Toast
