@@ -17,6 +17,11 @@ import {
     Legend
 } from 'chart.js';
 
+
+// ⬇️ ADD THIS LINE ⬇️
+const API_BASE = 'https://vggamee.com/api';
+
+
 // ADD these state variables (around line 20-30)
 
 // Admin Management (Super Admin Only)
@@ -63,8 +68,7 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 
-// ⬇️ ADD THIS LINE ⬇️
-const API_BASE = 'https://vggamee.com/api';
+
 
 
 // Helper to get admin auth headers
