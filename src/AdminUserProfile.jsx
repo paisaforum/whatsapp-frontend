@@ -4,7 +4,7 @@ import axios from 'axios';
 import Toast from './Toast';
 
 // ⬇️ ADD THESE HELPER FUNCTIONS ⬇️
-const API_BASE = 'https://vggamee.com/api';
+const API_BASE = 'http://vggamee.com/api';
 
 // Helper to get admin auth headers
 const getAuthHeaders = () => {

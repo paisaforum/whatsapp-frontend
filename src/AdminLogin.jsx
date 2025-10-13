@@ -16,7 +16,7 @@ function AdminLogin() {
     setLoading(true);
 
     try {
-      const response = await axios.post('https://vggamee.com/api/admin/login', {
+      const response = await axios.post('http://vggamee.com/api/admin/login', {
         username: username,
         password: password
       });

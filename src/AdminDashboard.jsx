@@ -19,7 +19,7 @@ import {
 
 
 // ⬇️ ADD THIS LINE ⬇️
-const API_BASE = 'https://vggamee.com/api';
+const API_BASE = 'http://vggamee.com/api';
 
 
 // ADD these state variables (around line 20-30)

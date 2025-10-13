@@ -4,7 +4,7 @@ import axios from 'axios';
 import Modal from './Modal';
 import Toast from './Toast';
 
-const API_BASE = 'https://vggamee.com/api';
+const API_BASE = 'http://vggamee.com/api';
 
 // Helper function to get auth headers
 const getAuthHeaders = () => {

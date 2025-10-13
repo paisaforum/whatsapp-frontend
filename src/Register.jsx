@@ -2,7 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE = 'https://vggamee.com/api';
+const API_BASE = 'http://vggamee.com/api';
 
 function Register() {
   const [whatsappNumber, setWhatsappNumber] = useState('');
